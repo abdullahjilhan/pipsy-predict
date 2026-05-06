@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchKlines, type Interval } from "@/lib/binance";
 import { computeSignal, type Candle } from "@/lib/indicators";
+import { computeHistoricalSignals } from "@/lib/historicalSignals";
 import { PriceChart } from "@/components/PriceChart";
 import { SignalCard } from "@/components/SignalCard";
 import { Activity, Bell, BellOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
@@ -39,6 +40,7 @@ const Index = () => {
   }, [symbol, interval]);
 
   const signal = useMemo(() => computeSignal(candles), [candles]);
+  const historicalMarkers = useMemo(() => computeHistoricalSignals(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
   const { soundEnabled, setSoundEnabled, notifPermission, requestPermission, history } = useSignalAlerts({
     action: signal?.action,
@@ -131,7 +133,7 @@ const Index = () => {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 rounded-2xl bg-card card-elevated border border-border p-4">
-            <PriceChart candles={candles} />
+            <PriceChart candles={candles} markers={historicalMarkers} />
           </div>
           <div className="space-y-6">
             <SignalCard signal={signal} price={price} symbol={symbol} />
