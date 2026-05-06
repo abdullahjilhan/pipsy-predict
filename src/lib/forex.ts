@@ -1,15 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
 import type { Candle } from "./indicators";
 import type { Interval } from "./binance";
 
 export const FOREX_PAIRS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "EUR/JPY"];
 
 export async function fetchForexCandles(symbol: string, interval: Interval, limit = 200): Promise<Candle[]> {
-  const { data, error } = await supabase.functions.invoke("forex", {
-    body: null,
-    method: "GET" as any,
-  } as any);
-  // supabase-js doesn't support GET query params easily; use fetch directly:
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/forex?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=${limit}`;
   const res = await fetch(url, {
     headers: {
@@ -23,6 +17,9 @@ export async function fetchForexCandles(symbol: string, interval: Interval, limi
   }
   const json = await res.json();
   return json.candles as Candle[];
-  // Suppress unused
-  void data; void error;
+}
+
+export function formatForexPrice(symbol: string, price: number) {
+  const digits = symbol.includes("JPY") ? 3 : 5;
+  return price.toFixed(digits);
 }
