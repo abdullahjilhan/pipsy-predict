@@ -133,7 +133,7 @@ const Index = () => {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 rounded-2xl bg-card card-elevated border border-border p-4">
-            <PriceChart candles={candles} />
+            <PriceChart candles={candles} markers={historicalMarkers} />
           </div>
           <div className="space-y-6">
             <SignalCard signal={signal} price={price} symbol={symbol} />
