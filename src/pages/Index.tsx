@@ -1,45 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchKlines, type Interval } from "@/lib/binance";
-import { fetchForexCandles, FOREX_PAIRS } from "@/lib/forex";
 import { computeSignal, type Candle } from "@/lib/indicators";
-import { computeHistoricalSignals } from "@/lib/historicalSignals";
 import { PriceChart } from "@/components/PriceChart";
 import { SignalCard } from "@/components/SignalCard";
 import { Activity, Bell, BellOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { useSignalAlerts } from "@/hooks/useSignalAlerts";
 
-type Market = "crypto" | "forex";
-
-const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
 const INTERVALS: Interval[] = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
 const Index = () => {
-  const [market, setMarket] = useState<Market>("crypto");
-  const [symbol, setSymbol] = useState<string>("BTCUSDT");
+  const [symbol, setSymbol] = useState("BTCUSDT");
   const [interval, setInterval] = useState<Interval>("15m");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updated, setUpdated] = useState<Date | null>(null);
 
-  const symbols = market === "crypto" ? CRYPTO_SYMBOLS : FOREX_PAIRS;
-
-  // Forex auto-refresh slower (free TwelveData = 8 req/min)
-  const refreshMs = market === "forex" ? 60_000 : 30_000;
-
-  useEffect(() => {
-    // Switch default symbol when market changes
-    setSymbol(market === "crypto" ? "BTCUSDT" : "EUR/USD");
-    setCandles([]);
-  }, [market]);
-
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = market === "crypto"
-        ? await fetchKlines(symbol, interval, 200)
-        : await fetchForexCandles(symbol, interval, 200);
+      const data = await fetchKlines(symbol, interval, 200);
       setCandles(data);
       setUpdated(new Date());
     } catch (e: any) {
@@ -51,13 +33,12 @@ const Index = () => {
 
   useEffect(() => {
     load();
-    const id = window.setInterval(load, refreshMs);
+    const id = window.setInterval(load, 30_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, interval, market]);
+  }, [symbol, interval]);
 
-  const signal = useMemo(() => computeSignal(candles, interval), [candles, interval]);
-  const historicalMarkers = useMemo(() => computeHistoricalSignals(candles, interval), [candles, interval]);
+  const signal = useMemo(() => computeSignal(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
   const { soundEnabled, setSoundEnabled, notifPermission, requestPermission, history } = useSignalAlerts({
     action: signal?.action,
@@ -65,8 +46,6 @@ const Index = () => {
     price,
     confidence: signal?.confidence ?? 0,
   });
-
-  const displaySymbol = (s: string) => market === "crypto" ? s.replace("USDT", "") : s;
 
   return (
     <div className="min-h-screen">
@@ -111,24 +90,9 @@ const Index = () => {
       </header>
 
       <main className="container py-8 space-y-6">
-        {/* Market toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated w-fit">
-          {(["crypto", "forex"] as Market[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMarket(m)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition ${
-                market === m ? "gradient-bull text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated flex-wrap">
-            {symbols.map((s) => (
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
+            {SYMBOLS.map((s) => (
               <button
                 key={s}
                 onClick={() => setSymbol(s)}
@@ -136,7 +100,7 @@ const Index = () => {
                   symbol === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {displaySymbol(s)}
+                {s.replace("USDT", "")}
               </button>
             ))}
           </div>
@@ -167,7 +131,7 @@ const Index = () => {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 rounded-2xl bg-card card-elevated border border-border p-4">
-            <PriceChart candles={candles} markers={historicalMarkers} />
+            <PriceChart candles={candles} />
           </div>
           <div className="space-y-6">
             <SignalCard signal={signal} price={price} symbol={symbol} />
@@ -181,10 +145,10 @@ const Index = () => {
               ) : (
                 <ul className="space-y-2 max-h-56 overflow-y-auto">
                   {history.map((h, i) => (
-                    <li key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0 gap-2">
+                    <li key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0">
                       <span className={`font-black tracking-wide ${h.action === "BUY" ? "text-bull" : "text-bear"}`}>{h.action}</span>
                       <span className="text-muted-foreground">{h.symbol}</span>
-                      <span className="tabular-nums">{h.price.toLocaleString(undefined, { maximumFractionDigits: 5 })}</span>
+                      <span className="tabular-nums">${h.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       <span className="text-muted-foreground">{h.confidence}%</span>
                       <span className="text-muted-foreground">{h.at.toLocaleTimeString()}</span>
                     </li>
@@ -196,8 +160,8 @@ const Index = () => {
         </div>
 
         <p className="text-xs text-muted-foreground text-center max-w-2xl mx-auto pt-4">
-          ⚠️ Educational use only. Signals are derived from technical indicators (RSI, EMA, MACD) on
-          {" "}{market === "crypto" ? "Binance" : "TwelveData"} feeds and do not constitute financial advice.
+          ⚠️ This tool is for educational purposes only. Signals are derived from technical indicators (RSI, EMA, MACD)
+          and do not constitute financial advice. Trade at your own risk.
         </p>
       </main>
     </div>
