@@ -56,8 +56,8 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, interval, market]);
 
-  const signal = useMemo(() => computeSignal(candles), [candles]);
-  const historicalMarkers = useMemo(() => computeHistoricalSignals(candles), [candles]);
+  const signal = useMemo(() => computeSignal(candles, interval), [candles, interval]);
+  const historicalMarkers = useMemo(() => computeHistoricalSignals(candles, interval), [candles, interval]);
   const price = candles[candles.length - 1]?.close ?? 0;
   const { soundEnabled, setSoundEnabled, notifPermission, requestPermission, history } = useSignalAlerts({
     action: signal?.action,
