@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchKlines, type Interval } from "@/lib/binance";
 import { computeSignal, type Candle } from "@/lib/indicators";
+import { computeHistoricalSignals } from "@/lib/historicalSignals";
 import { PriceChart } from "@/components/PriceChart";
 import { SignalCard } from "@/components/SignalCard";
 import { Activity, Bell, BellOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
@@ -39,6 +40,7 @@ const Index = () => {
   }, [symbol, interval]);
 
   const signal = useMemo(() => computeSignal(candles), [candles]);
+  const historicalMarkers = useMemo(() => computeHistoricalSignals(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
   const { soundEnabled, setSoundEnabled, notifPermission, requestPermission, history } = useSignalAlerts({
     action: signal?.action,
