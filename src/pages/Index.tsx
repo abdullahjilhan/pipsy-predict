@@ -510,7 +510,7 @@ const Index = () => {
                         <p className="text-4xl font-black">{signal.confidence}%</p>
                         <p className="text-xs mt-2 opacity-80">Price</p>
                         <p className="text-lg font-bold tabular-nums">
-                          ${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {market === "crypto" ? "$" : ""}{priceFmt(market, price)}
                         </p>
                       </div>
                     </div>
