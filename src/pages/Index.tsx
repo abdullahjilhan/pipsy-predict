@@ -318,13 +318,21 @@ const PriceChart = ({ candles, signal }: { candles: Candle[]; signal: Signal | n
 // ============================================================
 // CONSTANTS
 // ============================================================
-const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+const FOREX_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "XAU/USD"];
 const INTERVALS: Interval[] = ["1m", "5m", "15m", "1h", "4h", "1d"];
+
+const labelOf = (s: string) => s.replace("USDT", "");
+const priceFmt = (market: Market, p: number) =>
+  market === "forex"
+    ? p.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 2 })
+    : p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 // ============================================================
 // MAIN
 // ============================================================
 const Index = () => {
+  const [market, setMarket] = useState<Market>("crypto");
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [interval, setInterval] = useState<Interval>("15m");
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -339,10 +347,20 @@ const Index = () => {
   const [history, setHistory] = useState<{ action: Action; symbol: string; price: number; confidence: number; at: Date }[]>([]);
   const lastActionRef = useRef<Action | null>(null);
 
+  const symbols = market === "crypto" ? CRYPTO_SYMBOLS : FOREX_SYMBOLS;
+
+  const switchMarket = (m: Market) => {
+    setMarket(m);
+    setSymbol(m === "crypto" ? CRYPTO_SYMBOLS[0] : FOREX_SYMBOLS[0]);
+    setCandles([]);
+  };
+
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await fetchKlines(symbol, interval, 500);
+      const data = market === "crypto"
+        ? await fetchCryptoCandles(symbol, interval, 500)
+        : await fetchForexCandles(symbol, interval);
       setCandles(data); setUpdated(new Date());
     } catch (e: any) { setError(e.message || "Failed to load"); }
     finally { setLoading(false); }
@@ -353,7 +371,7 @@ const Index = () => {
     const id = window.setInterval(load, 30_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, interval]);
+  }, [symbol, interval, market]);
 
   const signal = useMemo(() => computeSignal(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
