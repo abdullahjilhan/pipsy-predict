@@ -561,7 +561,7 @@ const Index = () => {
                     <li key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0">
                       <span className={`font-black tracking-wide ${h.action === "BUY" ? "text-bull" : "text-bear"}`}>{h.action}</span>
                       <span className="text-muted-foreground">{h.symbol}</span>
-                      <span className="tabular-nums">${h.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                      <span className="tabular-nums">{h.price.toLocaleString(undefined, { maximumFractionDigits: 5 })}</span>
                       <span className="text-muted-foreground">{h.confidence}%</span>
                       <span className="text-muted-foreground">{h.at.toLocaleTimeString()}</span>
                     </li>
