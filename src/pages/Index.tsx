@@ -29,17 +29,26 @@ type Signal = {
 };
 
 // ============================================================
-// DATA FETCH (Binance)
+// DATA FETCH
 // ============================================================
-async function fetchKlines(symbol: string, interval: Interval, limit = 500): Promise<Candle[]> {
+async function fetchCryptoCandles(symbol: string, interval: Interval, limit = 500): Promise<Candle[]> {
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch market data");
+  if (!res.ok) throw new Error("Failed to fetch crypto market data");
   const raw: any[] = await res.json();
   return raw.map((k) => ({
     time: Math.floor(k[0] / 1000),
     open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5],
   }));
+}
+
+async function fetchForexCandles(symbol: string, interval: Interval): Promise<Candle[]> {
+  const { data, error } = await supabase.functions.invoke("forex-klines", {
+    body: { symbol, interval },
+  });
+  if (error) throw new Error(error.message || "Failed to fetch forex data");
+  if (data?.error) throw new Error(data.error);
+  return data.candles as Candle[];
 }
 
 // ============================================================
