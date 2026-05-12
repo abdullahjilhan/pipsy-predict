@@ -1,1 +1,4 @@
 project_id = "qsffhumlbgnyjyrxlfon"
+
+[functions.forex-klines]
+verify_jwt = false
