@@ -442,12 +442,22 @@ const Index = () => {
       <main className="container py-8 space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
-            {SYMBOLS.map((s) => (
+            {(["crypto", "forex"] as Market[]).map((m) => (
+              <button key={m} onClick={() => switchMarket(m)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
+                  market === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated flex-wrap">
+            {symbols.map((s) => (
               <button key={s} onClick={() => setSymbol(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide transition ${
                   symbol === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}>
-                {s.replace("USDT", "")}
+                {labelOf(s)}
               </button>
             ))}
           </div>
