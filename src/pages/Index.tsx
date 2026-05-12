@@ -416,8 +416,8 @@ const Index = () => {
               <Activity className="w-5 h-5 text-primary-foreground" strokeWidth={3} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight">SIGNAL<span className="text-primary">.</span>BOT</h1>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Binary trading signals</p>
+              <h1 className="text-lg font-black tracking-tight">PIPSY<span className="text-primary">.</span>SIGNALS</h1>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Crypto &amp; Forex signal platform</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
