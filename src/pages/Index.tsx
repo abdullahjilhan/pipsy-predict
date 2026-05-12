@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, CandlestickSeries, LineSeries, type IChartApi, type ISeriesApi } from "lightweight-charts";
 import { Activity, ArrowDown, ArrowUp, Bell, BellOff, Minus, RefreshCw, TrendingUp, Volume2, VolumeX } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+type Market = "crypto" | "forex";
 
 // ============================================================
 // TYPES
@@ -26,17 +29,26 @@ type Signal = {
 };
 
 // ============================================================
-// DATA FETCH (Binance)
+// DATA FETCH
 // ============================================================
-async function fetchKlines(symbol: string, interval: Interval, limit = 500): Promise<Candle[]> {
+async function fetchCryptoCandles(symbol: string, interval: Interval, limit = 500): Promise<Candle[]> {
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch market data");
+  if (!res.ok) throw new Error("Failed to fetch crypto market data");
   const raw: any[] = await res.json();
   return raw.map((k) => ({
     time: Math.floor(k[0] / 1000),
     open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5],
   }));
+}
+
+async function fetchForexCandles(symbol: string, interval: Interval): Promise<Candle[]> {
+  const { data, error } = await supabase.functions.invoke("forex-klines", {
+    body: { symbol, interval },
+  });
+  if (error) throw new Error(error.message || "Failed to fetch forex data");
+  if (data?.error) throw new Error(data.error);
+  return data.candles as Candle[];
 }
 
 // ============================================================
@@ -306,13 +318,21 @@ const PriceChart = ({ candles, signal }: { candles: Candle[]; signal: Signal | n
 // ============================================================
 // CONSTANTS
 // ============================================================
-const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+const CRYPTO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+const FOREX_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "XAU/USD"];
 const INTERVALS: Interval[] = ["1m", "5m", "15m", "1h", "4h", "1d"];
+
+const labelOf = (s: string) => s.replace("USDT", "");
+const priceFmt = (market: Market, p: number) =>
+  market === "forex"
+    ? p.toLocaleString(undefined, { maximumFractionDigits: 5, minimumFractionDigits: 2 })
+    : p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 // ============================================================
 // MAIN
 // ============================================================
 const Index = () => {
+  const [market, setMarket] = useState<Market>("crypto");
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [interval, setInterval] = useState<Interval>("15m");
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -327,10 +347,20 @@ const Index = () => {
   const [history, setHistory] = useState<{ action: Action; symbol: string; price: number; confidence: number; at: Date }[]>([]);
   const lastActionRef = useRef<Action | null>(null);
 
+  const symbols = market === "crypto" ? CRYPTO_SYMBOLS : FOREX_SYMBOLS;
+
+  const switchMarket = (m: Market) => {
+    setMarket(m);
+    setSymbol(m === "crypto" ? CRYPTO_SYMBOLS[0] : FOREX_SYMBOLS[0]);
+    setCandles([]);
+  };
+
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const data = await fetchKlines(symbol, interval, 500);
+      const data = market === "crypto"
+        ? await fetchCryptoCandles(symbol, interval, 500)
+        : await fetchForexCandles(symbol, interval);
       setCandles(data); setUpdated(new Date());
     } catch (e: any) { setError(e.message || "Failed to load"); }
     finally { setLoading(false); }
@@ -341,7 +371,7 @@ const Index = () => {
     const id = window.setInterval(load, 30_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, interval]);
+  }, [symbol, interval, market]);
 
   const signal = useMemo(() => computeSignal(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
@@ -357,7 +387,7 @@ const Index = () => {
       if (notifPermission === "granted") {
         try {
           new Notification(`${a} signal · ${symbol}`, {
-            body: `Confidence ${signal.confidence}% · $${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+            body: `Confidence ${signal.confidence}% · ${priceFmt(market, price)}`,
           });
         } catch {}
       }
@@ -386,8 +416,8 @@ const Index = () => {
               <Activity className="w-5 h-5 text-primary-foreground" strokeWidth={3} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight">SIGNAL<span className="text-primary">.</span>BOT</h1>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Binary trading signals</p>
+              <h1 className="text-lg font-black tracking-tight">PIPSY<span className="text-primary">.</span>SIGNALS</h1>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Crypto &amp; Forex signal platform</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -412,12 +442,22 @@ const Index = () => {
       <main className="container py-8 space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
-            {SYMBOLS.map((s) => (
+            {(["crypto", "forex"] as Market[]).map((m) => (
+              <button key={m} onClick={() => switchMarket(m)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
+                  market === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated flex-wrap">
+            {symbols.map((s) => (
               <button key={s} onClick={() => setSymbol(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide transition ${
                   symbol === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}>
-                {s.replace("USDT", "")}
+                {labelOf(s)}
               </button>
             ))}
           </div>
@@ -470,7 +510,7 @@ const Index = () => {
                         <p className="text-4xl font-black">{signal.confidence}%</p>
                         <p className="text-xs mt-2 opacity-80">Price</p>
                         <p className="text-lg font-bold tabular-nums">
-                          ${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {market === "crypto" ? "$" : ""}{priceFmt(market, price)}
                         </p>
                       </div>
                     </div>
@@ -521,7 +561,7 @@ const Index = () => {
                     <li key={i} className="flex items-center justify-between text-xs border-b border-border/50 pb-2 last:border-0">
                       <span className={`font-black tracking-wide ${h.action === "BUY" ? "text-bull" : "text-bear"}`}>{h.action}</span>
                       <span className="text-muted-foreground">{h.symbol}</span>
-                      <span className="tabular-nums">${h.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                      <span className="tabular-nums">{h.price.toLocaleString(undefined, { maximumFractionDigits: 5 })}</span>
                       <span className="text-muted-foreground">{h.confidence}%</span>
                       <span className="text-muted-foreground">{h.at.toLocaleTimeString()}</span>
                     </li>
