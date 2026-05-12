@@ -387,7 +387,7 @@ const Index = () => {
       if (notifPermission === "granted") {
         try {
           new Notification(`${a} signal · ${symbol}`, {
-            body: `Confidence ${signal.confidence}% · $${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+            body: `Confidence ${signal.confidence}% · ${priceFmt(market, price)}`,
           });
         } catch {}
       }
