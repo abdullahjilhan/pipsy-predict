@@ -48,6 +48,7 @@ async function fetchForexCandles(symbol: string, interval: Interval): Promise<Ca
   });
   if (error) throw new Error(error.message || "Failed to fetch forex data");
   if (data?.error) throw new Error(data.error);
+  if (data?.warning) console.warn(data.warning);
   return data.candles as Candle[];
 }
 
@@ -361,8 +362,12 @@ const Index = () => {
       const data = market === "crypto"
         ? await fetchCryptoCandles(symbol, interval, 500)
         : await fetchForexCandles(symbol, interval);
+      if (!data.length) throw new Error("Forex data is temporarily unavailable. Please try again shortly.");
       setCandles(data); setUpdated(new Date());
-    } catch (e: any) { setError(e.message || "Failed to load"); }
+    } catch (e: any) {
+      setError(e.message || "Failed to load");
+      setCandles([]);
+    }
     finally { setLoading(false); }
   };
 
