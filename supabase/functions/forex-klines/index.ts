@@ -16,6 +16,12 @@ const intervalMap: Record<string, string> = {
   "1d": "1day",
 };
 
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -23,15 +29,24 @@ serve(async (req) => {
     const { symbol, interval } = await req.json();
     const apiKey = (Deno.env.get("TWELVEDATA_API_KEY") || "").trim();
     console.log("TWELVEDATA_API_KEY length:", apiKey.length);
-    if (!apiKey) throw new Error("TWELVEDATA_API_KEY not configured");
+    if (!apiKey) {
+      console.error("TWELVEDATA_API_KEY is not configured");
+      return jsonResponse({ candles: [], warning: "Forex data is temporarily unavailable." });
+    }
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      return jsonResponse({ error: "A valid symbol is required." }, 400);
+    }
     const tdInterval = intervalMap[interval] || "15min";
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(
-      symbol
+      symbol.trim()
     )}&interval=${tdInterval}&outputsize=500&apikey=${apiKey}&format=JSON`;
 
     const res = await fetch(url);
     const data = await res.json();
-    if (data.status === "error") throw new Error(data.message || "TwelveData error");
+    if (!res.ok || data.status === "error") {
+      console.error("TwelveData request failed:", data?.code || res.status, data?.message || res.statusText);
+      return jsonResponse({ candles: [], warning: "Forex data provider rejected the request. Please check the API key." });
+    }
 
     const values = (data.values || []).slice().reverse();
     const candles = values.map((v: any) => ({
@@ -43,13 +58,9 @@ serve(async (req) => {
       volume: +(v.volume || 0),
     }));
 
-    return new Response(JSON.stringify({ candles }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ candles });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("forex-klines failed:", (e as Error).message);
+    return jsonResponse({ candles: [], warning: "Forex data is temporarily unavailable." });
   }
 });
