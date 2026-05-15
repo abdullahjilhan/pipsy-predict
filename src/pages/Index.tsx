@@ -445,41 +445,53 @@ const Index = () => {
       </header>
 
       <main className="container py-8 space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
-            {(["crypto", "forex"] as Market[]).map((m) => (
-              <button key={m} onClick={() => switchMarket(m)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
-                  market === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {m}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Market</label>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
+              {(["crypto", "forex"] as Market[]).map((m) => (
+                <button key={m} onClick={() => switchMarket(m)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
+                    market === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {m}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated flex-wrap">
-            {symbols.map((s) => (
-              <button key={s} onClick={() => setSymbol(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide transition ${
-                  symbol === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {labelOf(s)}
-              </button>
-            ))}
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="pair-select" className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Pair</label>
+            <select
+              id="pair-select"
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-card border border-border card-elevated text-sm font-bold tracking-wide focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer min-w-[120px]"
+            >
+              {symbols.map((s) => (
+                <option key={s} value={s}>{labelOf(s)}</option>
+              ))}
+            </select>
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
-            {INTERVALS.map((i) => (
-              <button key={i} onClick={() => setInterval(i)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
-                  interval === i ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {i}
-              </button>
-            ))}
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="tf-select" className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Timeframe</label>
+            <select
+              id="tf-select"
+              value={interval}
+              onChange={(e) => setInterval(e.target.value as Interval)}
+              className="px-3 py-2 rounded-xl bg-card border border-border card-elevated text-sm font-bold uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-accent cursor-pointer min-w-[90px]"
+            >
+              {INTERVALS.map((i) => (
+                <option key={i} value={i}>{i}</option>
+              ))}
+            </select>
           </div>
+
           {updated && (
-            <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2 pb-2">
               <span className="w-2 h-2 rounded-full bg-bull animate-pulse-glow" />
-              Live · updated {updated.toLocaleTimeString()}
+              Live · {symbol} · {interval} · {updated.toLocaleTimeString()}
             </span>
           )}
         </div>
