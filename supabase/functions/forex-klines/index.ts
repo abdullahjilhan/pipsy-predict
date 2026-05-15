@@ -21,7 +21,8 @@ serve(async (req) => {
 
   try {
     const { symbol, interval } = await req.json();
-    const apiKey = Deno.env.get("TWELVEDATA_API_KEY");
+    const apiKey = (Deno.env.get("TWELVEDATA_API_KEY") || "").trim();
+    console.log("TWELVEDATA_API_KEY length:", apiKey.length);
     if (!apiKey) throw new Error("TWELVEDATA_API_KEY not configured");
     const tdInterval = intervalMap[interval] || "15min";
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(
