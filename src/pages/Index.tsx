@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AccuracyDashboard } from "@/components/AccuracyDashboard";
 import pipsyLogo from "@/assets/pipsy-logo.png";
 
-type Market = "crypto" | "forex";
+type Market = "crypto" | "forex" | "stocks" | "commodities";
 
 // ============================================================
 // TYPES
@@ -13,21 +13,174 @@ type Market = "crypto" | "forex";
 type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
 type Interval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 type Action = "BUY" | "SELL" | "HOLD";
+
+type SignalSettings = {
+  rsiPeriod: number;
+  rsiOverbought: number;
+  rsiOversold: number;
+  emaFast: number;
+  emaSlow: number;
+  emaMacro: number;
+  macdFast: number;
+  macdSlow: number;
+  macdSignal: number;
+  bbPeriod: number;
+  bbStdDev: number;
+  stochK: number;
+  stochD: number;
+  stochOverbought: number;
+  stochOversold: number;
+  adxPeriod: number;
+  adxThreshold: number;
+};
+
+type SignalAlignment = {
+  emaMacro: boolean;
+  adx: boolean;
+  macd: boolean;
+  emaCross: boolean;
+  rsi: boolean;
+  stochastic: boolean;
+};
+
 type Signal = {
   action: Action;
   confidence: number;
   prediction: "BULLISH" | "BEARISH" | "NEUTRAL";
   reasons: string[];
   rsi: number;
-  ema20: number;
-  ema50: number;
-  ema200: number;
+  emaFast: number;
+  emaSlow: number;
+  emaMacro: number;
   macdHist: number;
   stochK: number;
+  stochD: number;
   adx: number;
   bbUpper: number;
   bbLower: number;
+  strength: number;
+  alignment: SignalAlignment;
   score: number;
+};
+
+const MARKET_LABELS: Record<Market, string> = {
+  crypto: "Crypto",
+  forex: "Forex",
+  stocks: "Stocks",
+  commodities: "Commodities",
+};
+
+const MARKET_PRESETS: Record<Market, SignalSettings> = {
+  crypto: {
+    rsiPeriod: 21,
+    rsiOverbought: 75,
+    rsiOversold: 25,
+    emaFast: 13,
+    emaSlow: 34,
+    emaMacro: 200,
+    macdFast: 8,
+    macdSlow: 17,
+    macdSignal: 9,
+    bbPeriod: 20,
+    bbStdDev: 2.5,
+    stochK: 14,
+    stochD: 5,
+    stochOverbought: 80,
+    stochOversold: 20,
+    adxPeriod: 14,
+    adxThreshold: 30,
+  },
+  forex: {
+    rsiPeriod: 21,
+    rsiOverbought: 75,
+    rsiOversold: 25,
+    emaFast: 8,
+    emaSlow: 21,
+    emaMacro: 200,
+    macdFast: 8,
+    macdSlow: 17,
+    macdSignal: 9,
+    bbPeriod: 20,
+    bbStdDev: 2.5,
+    stochK: 14,
+    stochD: 5,
+    stochOverbought: 80,
+    stochOversold: 20,
+    adxPeriod: 14,
+    adxThreshold: 30,
+  },
+  stocks: {
+    rsiPeriod: 21,
+    rsiOverbought: 75,
+    rsiOversold: 25,
+    emaFast: 8,
+    emaSlow: 21,
+    emaMacro: 200,
+    macdFast: 8,
+    macdSlow: 17,
+    macdSignal: 9,
+    bbPeriod: 20,
+    bbStdDev: 2.5,
+    stochK: 14,
+    stochD: 5,
+    stochOverbought: 80,
+    stochOversold: 20,
+    adxPeriod: 14,
+    adxThreshold: 30,
+  },
+  commodities: {
+    rsiPeriod: 21,
+    rsiOverbought: 75,
+    rsiOversold: 25,
+    emaFast: 8,
+    emaSlow: 21,
+    emaMacro: 200,
+    macdFast: 8,
+    macdSlow: 17,
+    macdSignal: 9,
+    bbPeriod: 20,
+    bbStdDev: 2.5,
+    stochK: 14,
+    stochD: 5,
+    stochOverbought: 80,
+    stochOversold: 20,
+    adxPeriod: 14,
+    adxThreshold: 30,
+  },
+};
+
+const MARKET_SYMBOLS: Record<Market, string[]> = {
+  crypto: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"],
+  forex: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD", "XAU/USD"],
+  stocks: ["AAPL", "MSFT", "TSLA", "AMZN", "NVDA"],
+  commodities: ["XAU/USD", "XAG/USD", "WTI/USD", "BRENT/USD"],
+};
+
+const INDICATOR_INFO = {
+  RSI: {
+    reason: "Period 21 smooths false signals. Tighter OB/OS levels (75/25) filter only real extremes.",
+    role: "Momentum confirmation + reversal timing",
+  },
+  EMA: {
+    reason: "8/21 combo is institutional-grade. 200 EMA is your macro trend filter — only longs above it, only shorts below.",
+    role: "Trend direction + momentum crossover",
+  },
+  MACD: {
+    reason: "8/17/9 is more responsive than the 1970s-era default. Catches momentum shifts before the crowd sees them.",
+    role: "Momentum entry confirmation",
+  },
+  BollingerBands: {
+    reason: "2.5 std dev handles fat tails in crypto/forex. At 2.0 you get too many false breakout signals in volatile markets.",
+    role: "Volatility measurement + breakout detection",
+  },
+  Stochastic: {
+    reason: "D period 5 smooths the signal line, reducing whipsaws. OB/OS levels are well-calibrated.",
+    role: "Entry timing precision",
+  },
+  ADX: {
+    reason: "Threshold 30 filters weak/choppy trends. Below 30 = range market, avoid trend-following entries.",
+    role: "Trend strength gate",
+  },
 };
 
 // ============================================================
@@ -161,95 +314,124 @@ function adx(candles: Candle[], period = 14): number[] {
 }
 
 // ============================================================
-// SIGNAL ENGINE (multi-indicator, weighted, trend-filtered)
+// SIGNAL ENGINE (multi-indicator, 4-layer/6-indicator alignment)
 // ============================================================
-function computeSignal(candles: Candle[]): Signal | null {
-  if (candles.length < 210) return null;
+function computeSignal(candles: Candle[], settings: SignalSettings): Signal | null {
+  if (candles.length < Math.max(settings.rsiPeriod, settings.emaMacro, settings.macdSlow, settings.bbPeriod, settings.adxPeriod) + 5) return null;
   const closes = candles.map((c) => c.close);
-  const vols = candles.map((c) => c.volume);
-  const r = rsi(closes, 14);
-  const e20 = ema(closes, 20);
-  const e50 = ema(closes, 50);
-  const e200 = ema(closes, 200);
-  const m = macd(closes);
-  const st = stochastic(candles);
-  const bb = bollinger(closes, 20, 2);
-  const adxV = adx(candles, 14);
-  const volMA = sma(vols, 20);
+  const r = rsi(closes, settings.rsiPeriod);
+  const eFast = ema(closes, settings.emaFast);
+  const eSlow = ema(closes, settings.emaSlow);
+  const eMacro = ema(closes, settings.emaMacro);
+  const m = macd(closes, settings.macdFast, settings.macdSlow, settings.macdSignal);
+  const st = stochastic(candles, settings.stochK, settings.stochD);
+  const bb = bollinger(closes, settings.bbPeriod, settings.bbStdDev);
+  const adxV = adx(candles, settings.adxPeriod);
   const i = closes.length - 1;
-  const last = candles[i], prev = candles[i - 1];
+  const last = candles[i];
 
-  let score = 0;
+  const emaMacroLong = Number.isFinite(eMacro[i]) && last.close > eMacro[i];
+  const emaMacroShort = Number.isFinite(eMacro[i]) && last.close < eMacro[i];
+  const adxStrong = adxV[i] >= settings.adxThreshold;
+  const macdLong = Number.isFinite(m.line[i]) && Number.isFinite(m.sig[i]) && m.line[i] > m.sig[i] && m.line[i - 1] <= m.sig[i - 1];
+  const macdShort = Number.isFinite(m.line[i]) && Number.isFinite(m.sig[i]) && m.line[i] < m.sig[i] && m.line[i - 1] >= m.sig[i - 1];
+  const emaCrossLong = Number.isFinite(eFast[i]) && Number.isFinite(eSlow[i]) && eFast[i] > eSlow[i] && eFast[i - 1] <= eSlow[i - 1];
+  const emaCrossShort = Number.isFinite(eFast[i]) && Number.isFinite(eSlow[i]) && eFast[i] < eSlow[i] && eFast[i - 1] >= eSlow[i - 1];
+  const rsiLong = Number.isFinite(r[i]) && r[i] < settings.rsiOverbought;
+  const rsiShort = Number.isFinite(r[i]) && r[i] > settings.rsiOversold;
+  const stochLong = Number.isFinite(st.k[i]) && Number.isFinite(st.d[i]) && st.k[i] > st.d[i] && st.k[i - 1] <= st.d[i - 1] && st.k[i] < settings.stochOverbought;
+  const stochShort = Number.isFinite(st.k[i]) && Number.isFinite(st.d[i]) && st.k[i] < st.d[i] && st.k[i - 1] >= st.d[i - 1] && st.k[i] > settings.stochOversold;
+  const bbLong = Number.isFinite(bb.lower[i]) && last.close <= bb.lower[i];
+  const bbShort = Number.isFinite(bb.upper[i]) && last.close >= bb.upper[i];
+
+  const alignment: SignalAlignment = {
+    emaMacro: emaMacroLong || emaMacroShort,
+    adx: adxStrong && (emaMacroLong || emaMacroShort),
+    macd: macdLong || macdShort,
+    emaCross: emaCrossLong || emaCrossShort,
+    rsi: rsiLong || rsiShort,
+    stochastic: stochLong || stochShort,
+  };
+
+  let longCount = 0;
+  let shortCount = 0;
+  if (emaMacroLong) longCount += 1;
+  if (emaMacroShort) shortCount += 1;
+  if (adxStrong) {
+    if (emaMacroLong) longCount += 1;
+    else if (emaMacroShort) shortCount += 1;
+  }
+  if (macdLong) longCount += 1;
+  if (macdShort) shortCount += 1;
+  if (emaCrossLong) longCount += 1;
+  if (emaCrossShort) shortCount += 1;
+  if (rsiLong) longCount += 1;
+  if (rsiShort) shortCount += 1;
+  if (stochLong) longCount += 1;
+  if (stochShort) shortCount += 1;
+
+  const strength = Math.max(longCount, shortCount);
   const reasons: string[] = [];
 
-  // 1) Long-term trend filter (EMA200) — weight 2
-  if (last.close > e200[i]) { score += 2; reasons.push("Price above EMA200 (macro uptrend)"); }
-  else { score -= 2; reasons.push("Price below EMA200 (macro downtrend)"); }
+  if (emaMacroLong) reasons.push("EMA200 says macro uptrend");
+  else if (emaMacroShort) reasons.push("EMA200 says macro downtrend");
+  else reasons.push("EMA200 is flat or unavailable");
 
-  // 2) EMA20/50 cross — weight 1.5
-  if (e20[i] > e50[i]) { score += 1.5; reasons.push("EMA20 > EMA50 (bullish trend)"); }
-  else { score -= 1.5; reasons.push("EMA20 < EMA50 (bearish trend)"); }
-
-  // 3) RSI — weight up to 2
-  if (r[i] < 30) { score += 2; reasons.push(`RSI ${r[i].toFixed(1)} oversold (reversal up)`); }
-  else if (r[i] > 70) { score -= 2; reasons.push(`RSI ${r[i].toFixed(1)} overbought (reversal down)`); }
-  else if (r[i] > 55) { score += 0.7; reasons.push(`RSI ${r[i].toFixed(1)} bullish momentum`); }
-  else if (r[i] < 45) { score -= 0.7; reasons.push(`RSI ${r[i].toFixed(1)} bearish momentum`); }
-
-  // 4) MACD histogram + slope — weight up to 1.8
-  const histRising = m.hist[i] > m.hist[i - 1];
-  if (m.hist[i] > 0 && histRising) { score += 1.8; reasons.push("MACD positive & rising"); }
-  else if (m.hist[i] < 0 && !histRising) { score -= 1.8; reasons.push("MACD negative & falling"); }
-  else if (m.hist[i] > 0) { score += 0.6; reasons.push("MACD positive"); }
-  else { score -= 0.6; reasons.push("MACD negative"); }
-
-  // 5) Stochastic — weight up to 1.2
-  const kCross = st.k[i] > st.d[i] && st.k[i - 1] <= st.d[i - 1];
-  const dCross = st.k[i] < st.d[i] && st.k[i - 1] >= st.d[i - 1];
-  if (st.k[i] < 20 && kCross) { score += 1.2; reasons.push("Stoch bullish cross from oversold"); }
-  else if (st.k[i] > 80 && dCross) { score -= 1.2; reasons.push("Stoch bearish cross from overbought"); }
-  else if (st.k[i] < 20) { score += 0.5; reasons.push("Stoch oversold"); }
-  else if (st.k[i] > 80) { score -= 0.5; reasons.push("Stoch overbought"); }
-
-  // 6) Bollinger bands — weight 1
-  if (last.close <= bb.lower[i]) { score += 1; reasons.push("Price at lower BB (mean-reversion buy)"); }
-  else if (last.close >= bb.upper[i]) { score -= 1; reasons.push("Price at upper BB (mean-reversion sell)"); }
-
-  // 7) Volume confirmation — weight 0.8
-  const volSpike = last.volume > volMA[i] * 1.5;
-  const bullCandle = last.close > last.open;
-  if (volSpike && bullCandle) { score += 0.8; reasons.push("High volume bullish candle"); }
-  else if (volSpike && !bullCandle) { score -= 0.8; reasons.push("High volume bearish candle"); }
-
-  // 8) Engulfing candle pattern — weight 1
-  const bullEngulf = prev.close < prev.open && last.close > last.open && last.close > prev.open && last.open < prev.close;
-  const bearEngulf = prev.close > prev.open && last.close < last.open && last.close < prev.open && last.open > prev.close;
-  if (bullEngulf) { score += 1; reasons.push("Bullish engulfing pattern"); }
-  if (bearEngulf) { score -= 1; reasons.push("Bearish engulfing pattern"); }
-
-  // 9) ADX trend strength gate — amplify if strong, dampen if weak
-  const trendStrength = adxV[i];
-  if (trendStrength > 25) {
-    score *= 1.15;
-    reasons.push(`ADX ${trendStrength.toFixed(0)} strong trend`);
-  } else if (trendStrength < 18) {
-    score *= 0.7;
-    reasons.push(`ADX ${trendStrength.toFixed(0)} weak/ranging — caution`);
+  if (adxStrong) {
+    reasons.push(`ADX ${adxV[i].toFixed(0)} above ${settings.adxThreshold} — trend valid`);
+  } else {
+    reasons.push(`ADX ${adxV[i].toFixed(0)} below ${settings.adxThreshold} — weak trend`);
   }
 
-  const maxScore = 11;
-  const confidence = Math.min(100, Math.round((Math.abs(score) / maxScore) * 100));
+  if (macdLong) reasons.push("MACD crossed bullishly above signal line");
+  else if (macdShort) reasons.push("MACD crossed bearishly below signal line");
+  else reasons.push("MACD is neutral or not crossed yet");
+
+  if (emaCrossLong) reasons.push(`EMA${settings.emaFast}/${settings.emaSlow} bullish crossover`);
+  else if (emaCrossShort) reasons.push(`EMA${settings.emaFast}/${settings.emaSlow} bearish crossover`);
+  else reasons.push(`EMA${settings.emaFast}/${settings.emaSlow} still sorting out`);
+
+  if (rsiLong) reasons.push(`RSI ${r[i].toFixed(1)} below ${settings.rsiOverbought} — longs not overbought`);
+  else if (rsiShort) reasons.push(`RSI ${r[i].toFixed(1)} above ${settings.rsiOversold} — shorts not oversold`);
+  else reasons.push(`RSI ${r[i].toFixed(1)} in neutral momentum zone`);
+
+  if (stochLong) reasons.push(`Stochastic %K crossed above %D in a bullish zone`);
+  else if (stochShort) reasons.push(`Stochastic %K crossed below %D in a bearish zone`);
+  else reasons.push("Stochastic not showing a clean directional cross");
+
+  if (bbLong) reasons.push("Price touching lower Bollinger Band — volatility breakout/reversal zone");
+  else if (bbShort) reasons.push("Price touching upper Bollinger Band — volatility breakout/reversal zone");
+  else reasons.push("Price in BB middle zone — high chop probability");
+
+  const confidence = Math.min(100, Math.round((strength / 6) * 100 + Math.abs(longCount - shortCount) * 5));
   let action: Action = "HOLD";
   let prediction: Signal["prediction"] = "NEUTRAL";
-  // Higher threshold => fewer but more accurate signals
-  if (score >= 3.5) { action = "BUY"; prediction = "BULLISH"; }
-  else if (score <= -3.5) { action = "SELL"; prediction = "BEARISH"; }
+  if (strength >= 4 && longCount > shortCount) {
+    action = "BUY";
+    prediction = "BULLISH";
+  } else if (strength >= 4 && shortCount > longCount) {
+    action = "SELL";
+    prediction = "BEARISH";
+  }
 
   return {
-    action, confidence, prediction, reasons, score,
-    rsi: r[i], ema20: e20[i], ema50: e50[i], ema200: e200[i],
-    macdHist: m.hist[i], stochK: st.k[i], adx: trendStrength,
-    bbUpper: bb.upper[i], bbLower: bb.lower[i],
+    action,
+    confidence,
+    prediction,
+    reasons,
+    score: strength,
+    strength,
+    alignment,
+    rsi: r[i],
+    emaFast: eFast[i],
+    emaSlow: eSlow[i],
+    emaMacro: eMacro[i],
+    macdHist: m.hist[i],
+    stochK: st.k[i],
+    stochD: st.d[i],
+    adx: adxV[i],
+    bbUpper: bb.upper[i],
+    bbLower: bb.lower[i],
   };
 }
 
@@ -276,12 +458,13 @@ function playTone(action: Action) {
 // ============================================================
 // CHART
 // ============================================================
-const PriceChart = ({ candles, signal }: { candles: Candle[]; signal: Signal | null }) => {
+const PriceChart = ({ candles, signal, settings }: { candles: Candle[]; signal: Signal | null; settings: SignalSettings }) => {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const csRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const ema20Ref = useRef<ISeriesApi<"Line"> | null>(null);
-  const ema50Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const emaFastRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const emaSlowRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const emaMacroRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -297,8 +480,9 @@ const PriceChart = ({ candles, signal }: { candles: Candle[]; signal: Signal | n
       borderUpColor: "hsl(152, 76%, 50%)", borderDownColor: "hsl(0, 84%, 62%)",
       wickUpColor: "hsl(152, 76%, 50%)", wickDownColor: "hsl(0, 84%, 62%)",
     });
-    ema20Ref.current = chart.addSeries(LineSeries, { color: "hsl(199, 89%, 60%)", lineWidth: 1 });
-    ema50Ref.current = chart.addSeries(LineSeries, { color: "hsl(45, 93%, 60%)", lineWidth: 1 });
+    emaFastRef.current = chart.addSeries(LineSeries, { color: "hsl(199, 89%, 60%)", lineWidth: 1 });
+    emaSlowRef.current = chart.addSeries(LineSeries, { color: "hsl(45, 93%, 60%)", lineWidth: 1 });
+    emaMacroRef.current = chart.addSeries(LineSeries, { color: "hsl(305, 76%, 60%)", lineWidth: 1, lineStyle: 2 });
     chartRef.current = chart;
     const ro = new ResizeObserver(() => ref.current && chart.applyOptions({ width: ref.current.clientWidth }));
     ro.observe(ref.current);
@@ -309,11 +493,14 @@ const PriceChart = ({ candles, signal }: { candles: Candle[]; signal: Signal | n
     if (!csRef.current || !candles.length) return;
     csRef.current.setData(candles.map((c) => ({ time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close })));
     const closes = candles.map((c) => c.close);
-    const e20 = ema(closes, 20), e50 = ema(closes, 50);
-    ema20Ref.current?.setData(candles.map((c, i) => ({ time: c.time as any, value: e20[i] })));
-    ema50Ref.current?.setData(candles.map((c, i) => ({ time: c.time as any, value: e50[i] })));
+    const eFast = ema(closes, settings.emaFast);
+    const eSlow = ema(closes, settings.emaSlow);
+    const eMacro = ema(closes, settings.emaMacro);
+    emaFastRef.current?.setData(candles.map((c, i) => ({ time: c.time as any, value: eFast[i] })));
+    emaSlowRef.current?.setData(candles.map((c, i) => ({ time: c.time as any, value: eSlow[i] })));
+    emaMacroRef.current?.setData(candles.map((c, i) => ({ time: c.time as any, value: eMacro[i] })));
     chartRef.current?.timeScale().fitContent();
-  }, [candles, signal]);
+  }, [candles, settings]);
 
   return <div ref={ref} className="w-full" />;
 };
@@ -350,21 +537,28 @@ const Index = () => {
   const [history, setHistory] = useState<{ action: Action; symbol: string; price: number; confidence: number; at: Date }[]>([]);
   const lastActionRef = useRef<Action | null>(null);
 
-  const symbols = market === "crypto" ? CRYPTO_SYMBOLS : FOREX_SYMBOLS;
+  const symbols = MARKET_SYMBOLS[market];
 
   const switchMarket = (m: Market) => {
     setMarket(m);
-    setSymbol(m === "crypto" ? CRYPTO_SYMBOLS[0] : FOREX_SYMBOLS[0]);
+    setSettings(MARKET_PRESETS[m]);
+    setSymbol(MARKET_SYMBOLS[m][0] ?? "");
     setCandles([]);
+    setError(null);
   };
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const data = market === "crypto"
-        ? await fetchCryptoCandles(symbol, interval, 500)
-        : await fetchForexCandles(symbol, interval);
-      if (!data.length) throw new Error("Forex data is temporarily unavailable. Please try again shortly.");
+      let data: Candle[] = [];
+      if (market === "crypto") {
+        data = await fetchCryptoCandles(symbol, interval, 500);
+      } else if (market === "forex" || market === "commodities") {
+        data = await fetchForexCandles(symbol, interval);
+      } else {
+        throw new Error("Live stock data is not available. Use the presets for Stocks but switch to Crypto or Forex for live quotes.");
+      }
+      if (!data.length) throw new Error("Market data is temporarily unavailable. Please try again shortly.");
       setCandles(data); setUpdated(new Date());
     } catch (e: any) {
       setError(e.message || "Failed to load");
@@ -380,7 +574,9 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, interval, market]);
 
-  const signal = useMemo(() => computeSignal(candles), [candles]);
+  const [settings, setSettings] = useState<SignalSettings>(MARKET_PRESETS[market]);
+  const [showSettings, setShowSettings] = useState(true);
+  const signal = useMemo(() => computeSignal(candles, settings), [candles, settings]);
   const price = candles[candles.length - 1]?.close ?? 0;
 
   // Alerts + persistent logging on action flips to BUY/SELL
@@ -511,13 +707,13 @@ const Index = () => {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Market</label>
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
-              {(["crypto", "forex"] as Market[]).map((m) => (
+            <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-card border border-border card-elevated">
+              {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
                 <button key={m} onClick={() => switchMarket(m)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
                     market === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}>
-                  {m}
+                  {MARKET_LABELS[m]}
                 </button>
               ))}
             </div>
@@ -559,13 +755,139 @@ const Index = () => {
           )}
         </div>
 
+        <div className="rounded-2xl bg-card card-elevated border border-border p-4 space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-bold">Settings Panel</p>
+              <p className="text-xs text-muted-foreground">Adjust indicator parameters and choose market presets. Defaults follow the optimized multi-indicator trading settings.</p>
+            </div>
+            <button onClick={() => setShowSettings((v) => !v)}
+              className="px-4 py-2 rounded-xl bg-secondary hover:bg-secondary/80 border border-border text-xs uppercase tracking-widest">
+              {showSettings ? "Hide" : "Show"} settings
+            </button>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl bg-background/80 border border-border p-4">
+              <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Market preset</label>
+              <select
+                value={market}
+                onChange={(e) => switchMarket(e.target.value as Market)}
+                className="mt-2 w-full px-3 py-2 rounded-xl bg-card border border-border text-sm font-bold tracking-wide focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {(Object.keys(MARKET_LABELS) as Market[]).map((m) => (
+                  <option key={m} value={m}>{MARKET_LABELS[m]}</option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-2xl bg-background/80 border border-border p-4">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Risk management</p>
+              <ul className="mt-3 space-y-2 text-sm text-foreground/80">
+                <li>• Keep risk per trade at <strong>2%</strong> of account.</li>
+                <li>• Only enter when <strong>4/6 indicators</strong> align.</li>
+                <li>• Avoid trades if RSI is 40–60 or price is inside BB middle zone.</li>
+                <li>• ADX below {settings.adxThreshold} signals weak trend.</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl bg-background/80 border border-border p-4">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Current preset</p>
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
+                <div>RSI {settings.rsiPeriod} · OB/OS {settings.rsiOverbought}/{settings.rsiOversold}</div>
+                <div>EMA {settings.emaFast}/{settings.emaSlow}/{settings.emaMacro}</div>
+                <div>MACD {settings.macdFast}/{settings.macdSlow}/{settings.macdSignal}</div>
+                <div>BB {settings.bbPeriod}/{settings.bbStdDev.toFixed(1)}</div>
+                <div>Stoch {settings.stochK}/{settings.stochD} · OB/OS {settings.stochOverbought}/{settings.stochOversold}</div>
+                <div>ADX period {settings.adxPeriod} · threshold {settings.adxThreshold}</div>
+              </div>
+            </div>
+          </div>
+
+          {showSettings && (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-2xl bg-background/80 border border-border p-4 space-y-4">
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">RSI</p>
+                  <RangeControl label="RSI period" value={settings.rsiPeriod} min={10} max={40} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, rsiPeriod: value }))}
+                    description={INDICATOR_INFO.RSI.reason} />
+                  <RangeControl label="RSI overbought" value={settings.rsiOverbought} min={70} max={90} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, rsiOverbought: value }))}
+                    description="Tighter OB helps avoid tops on longs." />
+                  <RangeControl label="RSI oversold" value={settings.rsiOversold} min={10} max={35} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, rsiOversold: value }))}
+                    description="Lower OS helps avoid failed short entries." />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">EMA</p>
+                  <RangeControl label="Fast EMA" value={settings.emaFast} min={5} max={20} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, emaFast: value }))}
+                    description={INDICATOR_INFO.EMA.reason} />
+                  <RangeControl label="Slow EMA" value={settings.emaSlow} min={15} max={40} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, emaSlow: value }))}
+                    description="Fast/slow cross for momentum entry." />
+                  <RangeControl label="Macro EMA" value={settings.emaMacro} min={100} max={300} step={10}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, emaMacro: value }))}
+                    description="200 EMA filters the dominant market direction." />
+                </div>
+              </div>
+              <div className="rounded-2xl bg-background/80 border border-border p-4 space-y-4">
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">MACD</p>
+                  <RangeControl label="MACD fast" value={settings.macdFast} min={5} max={12} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, macdFast: value }))}
+                    description={INDICATOR_INFO.MACD.reason} />
+                  <RangeControl label="MACD slow" value={settings.macdSlow} min={15} max={30} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, macdSlow: value }))}
+                    description="Slower MACD line for smoother trend confirmation." />
+                  <RangeControl label="MACD signal" value={settings.macdSignal} min={5} max={12} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, macdSignal: value }))}
+                    description="Signal line smoothing for crossover timing." />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Bollinger Bands</p>
+                  <RangeControl label="BB period" value={settings.bbPeriod} min={10} max={40} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, bbPeriod: value }))}
+                    description={INDICATOR_INFO.BollingerBands.reason} />
+                  <RangeControl label="BB std dev" value={settings.bbStdDev} min={1.5} max={3.5} step={0.1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, bbStdDev: value }))}
+                    description="Higher deviation captures volatility and reduces false breakouts." />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Stochastic</p>
+                  <RangeControl label="Stoch %K" value={settings.stochK} min={5} max={20} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, stochK: value }))}
+                    description="K period for entry timing precision." />
+                  <RangeControl label="Stoch %D" value={settings.stochD} min={3} max={10} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, stochD: value }))}
+                    description={INDICATOR_INFO.Stochastic.reason} />
+                  <RangeControl label="Stoch OB" value={settings.stochOverbought} min={70} max={90} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, stochOverbought: value }))}
+                    description="Overbought threshold for sell timing." />
+                  <RangeControl label="Stoch OS" value={settings.stochOversold} min={10} max={30} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, stochOversold: value }))}
+                    description="Oversold threshold for buy timing." />
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">ADX</p>
+                  <RangeControl label="ADX period" value={settings.adxPeriod} min={10} max={30} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, adxPeriod: value }))}
+                    description="Trend strength smoothing period." />
+                  <RangeControl label="ADX threshold" value={settings.adxThreshold} min={20} max={40} step={1}
+                    onChange={(value) => setSettings((prev) => ({ ...prev, adxThreshold: value }))}
+                    description={INDICATOR_INFO.ADX.reason} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {error && (
           <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-destructive text-sm">{error}</div>
         )}
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 rounded-2xl bg-card card-elevated border border-border p-4">
-            <PriceChart candles={candles} signal={signal} />
+            <PriceChart candles={candles} signal={signal} settings={settings} />
           </div>
 
           <div className="space-y-6">
@@ -598,21 +920,34 @@ const Index = () => {
 
                   <div className="p-6 space-y-4">
                     <div className="grid grid-cols-3 gap-3">
-                      <Metric label="RSI(14)" value={signal.rsi.toFixed(1)}
-                        accent={signal.rsi > 70 ? "bear" : signal.rsi < 30 ? "bull" : undefined} />
+                      <Metric label={`RSI(${settings.rsiPeriod})`} value={signal.rsi.toFixed(1)}
+                        accent={signal.rsi > settings.rsiOverbought ? "bear" : signal.rsi < settings.rsiOversold ? "bull" : undefined} />
                       <Metric label="Stoch %K" value={signal.stochK.toFixed(1)}
-                        accent={signal.stochK > 80 ? "bear" : signal.stochK < 20 ? "bull" : undefined} />
+                        accent={signal.stochK > settings.stochOverbought ? "bear" : signal.stochK < settings.stochOversold ? "bull" : undefined} />
                       <Metric label="ADX" value={signal.adx.toFixed(1)}
-                        accent={signal.adx > 25 ? "bull" : undefined} />
-                      <Metric label="EMA20" value={signal.ema20.toFixed(2)} />
-                      <Metric label="EMA200" value={signal.ema200.toFixed(2)} />
+                        accent={signal.adx >= settings.adxThreshold ? "bull" : undefined} />
+                      <Metric label={`EMA${settings.emaFast}`} value={signal.emaFast.toFixed(2)} />
+                      <Metric label={`EMA${settings.emaSlow}`} value={signal.emaSlow.toFixed(2)} />
                       <Metric label="MACD H" value={signal.macdHist.toFixed(4)}
                         accent={signal.macdHist > 0 ? "bull" : "bear"} />
                     </div>
 
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs uppercase tracking-widest text-muted-foreground">
+                        <span>Signal strength</span>
+                        <span>{signal.strength}/6 aligned</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-border overflow-hidden">
+                        <div className={`h-full rounded-full ${signal.strength >= 4 ? "bg-bull" : signal.strength === 3 ? "bg-amber-400" : "bg-bear"}`} style={{ width: `${(signal.strength / 6) * 100}%` }} />
+                      </div>
+                      {signal.strength < 4 && (
+                        <p className="text-xs text-yellow-300">Warning: less than 4 of 6 indicators aligned. Avoid entering trades until signal strength improves.</p>
+                      )}
+                    </div>
+
                     <div>
                       <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2">
-                        <TrendingUp className="w-3 h-3" /> Reasoning · score {signal.score.toFixed(2)}
+                        <TrendingUp className="w-3 h-3" /> Reasoning · aligned indicators {signal.strength}/6
                       </p>
                       <ul className="space-y-1.5">
                         {signal.reasons.map((r, i) => (
@@ -655,7 +990,7 @@ const Index = () => {
         <AccuracyDashboard />
 
         <p className="text-xs text-muted-foreground text-center max-w-2xl mx-auto pt-4">
-          ⚠️ Educational only. Signals derived from RSI, Stochastic, EMA(20/50/200), MACD, Bollinger Bands, ADX, volume & candle patterns.
+          ⚠️ Educational only. Signals derived from RSI, Stochastic, EMA, MACD, Bollinger Bands, ADX, volume & candle patterns. Use the 2% risk rule and wait for at least 4/6 aligned indicators.
           Not financial advice.
         </p>
       </main>
@@ -667,6 +1002,41 @@ const Metric = ({ label, value, accent }: { label: string; value: string; accent
   <div className="rounded-xl bg-secondary/60 border border-border p-3">
     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
     <p className={`text-base font-bold tabular-nums ${accent === "bull" ? "text-bull" : accent === "bear" ? "text-bear" : ""}`}>{value}</p>
+  </div>
+);
+
+const RangeControl = ({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  description,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+  description: string;
+}) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-sm font-semibold">{label}</p>
+      <span className="text-xs text-muted-foreground tabular-nums">{value}</span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full accent-primary"
+    />
+    <p className="text-xs text-muted-foreground">{description}</p>
   </div>
 );
 
