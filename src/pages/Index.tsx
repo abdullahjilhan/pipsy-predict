@@ -382,7 +382,7 @@ const Index = () => {
   const signal = useMemo(() => computeSignal(candles), [candles]);
   const price = candles[candles.length - 1]?.close ?? 0;
 
-  // Alerts on action flips to BUY/SELL
+  // Alerts + persistent logging on action flips to BUY/SELL
   useEffect(() => {
     if (!signal) return;
     const a = signal.action;
@@ -397,9 +397,72 @@ const Index = () => {
           });
         } catch {}
       }
+      // Predicted target: BB upper for BUY, BB lower for SELL (mean-reversion / continuation target)
+      const predicted = a === "BUY" ? signal.bbUpper : signal.bbLower;
+      if (Number.isFinite(predicted) && price > 0) {
+        supabase
+          .from("signals")
+          .insert({
+            asset: symbol,
+            signal_type: a,
+            price_at_signal: price,
+            predicted_price: predicted,
+          })
+          .then(({ error }) => {
+            if (error) console.warn("Signal log failed:", error.message);
+          });
+      }
     }
     lastActionRef.current = a;
-  }, [signal, symbol, price, soundEnabled, notifPermission]);
+  }, [signal, symbol, price, soundEnabled, notifPermission, market]);
+
+  // Evaluate pending signals older than 24h — fetch current price as the realised price
+  useEffect(() => {
+    const evaluate = async () => {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("signals")
+        .select("id, asset")
+        .is("actual_price", null)
+        .lte("created_at", cutoff)
+        .limit(25);
+      if (!data?.length) return;
+      const priceCache = new Map<string, number>();
+      for (const row of data) {
+        try {
+          let actual: number | null = priceCache.get(row.asset) ?? null;
+          if (actual == null) {
+            if (row.asset.includes("/")) {
+              const res = await supabase.functions.invoke("forex-klines", {
+                body: { symbol: row.asset, interval: "15m" },
+              });
+              const candles = (res.data?.candles ?? []) as Candle[];
+              actual = candles[candles.length - 1]?.close ?? null;
+            } else {
+              const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${row.asset}`);
+              if (r.ok) {
+                const j = await r.json();
+                actual = +j.price;
+              }
+            }
+            if (actual != null) priceCache.set(row.asset, actual);
+          }
+          if (actual != null) {
+            await supabase
+              .from("signals")
+              .update({ actual_price: actual, evaluated_at: new Date().toISOString() })
+              .eq("id", row.id);
+          }
+        } catch (e) {
+          console.warn("Signal eval failed", row.id, e);
+        }
+      }
+    };
+    evaluate();
+    const id = window.setInterval(evaluate, 5 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
 
   const requestPermission = async () => {
     if (typeof Notification === "undefined") return;
