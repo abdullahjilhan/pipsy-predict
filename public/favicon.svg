@@ -1,0 +1,47 @@
+<svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background with subtle gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1f2e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bullGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#34d399;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background with rounded corners -->
+  <rect width="192" height="192" rx="44" fill="url(#bgGradient)"/>
+  
+  <!-- Glow effect circle -->
+  <circle cx="96" cy="96" r="88" fill="none" stroke="url(#bullGradient)" stroke-width="2" opacity="0.2" filter="url(#glow)"/>
+  
+  <!-- Candlestick chart bars -->
+  <g transform="translate(96, 96)">
+    <!-- Left candlestick (bearish red) -->
+    <rect x="-48" y="-28" width="20" height="48" fill="#ef4444" rx="2"/>
+    <line x1="-38" y1="-40" x2="-38" y2="20" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Middle candlestick (bullish green) -->
+    <rect x="-18" y="-36" width="20" height="60" fill="url(#bullGradient)" rx="2"/>
+    <line x1="-8" y1="-44" x2="-8" y2="24" stroke="url(#bullGradient)" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Right candlestick (bullish green, larger) -->
+    <rect x="28" y="-44" width="20" height="72" fill="url(#bullGradient)" rx="2"/>
+    <line x1="38" y1="-52" x2="38" y2="28" stroke="url(#bullGradient)" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Trend line connecting highs -->
+    <polyline points="-38,-40 -8,-44 38,-52" stroke="url(#bullGradient)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+  </g>
+  
+  <!-- Border accent for definition -->
+  <rect width="192" height="192" rx="44" fill="none" stroke="url(#bullGradient)" stroke-width="1.5" opacity="0.3"/>
+</svg>
