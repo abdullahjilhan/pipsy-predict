@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, CandlestickSeries, LineSeries, type IChartApi, type ISeriesApi } from "lightweight-charts";
 import { Activity, ArrowDown, ArrowUp, Bell, BellOff, Minus, RefreshCw, TrendingUp, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AccuracyDashboard } from "@/components/AccuracyDashboard";
 
 type Market = "crypto" | "forex";
 
