@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      signals: {
+        Row: {
+          actual_price: number | null
+          asset: string
+          created_at: string
+          evaluated_at: string | null
+          id: string
+          predicted_price: number
+          price_at_signal: number
+          signal_type: string
+        }
+        Insert: {
+          actual_price?: number | null
+          asset: string
+          created_at?: string
+          evaluated_at?: string | null
+          id?: string
+          predicted_price: number
+          price_at_signal: number
+          signal_type: string
+        }
+        Update: {
+          actual_price?: number | null
+          asset?: string
+          created_at?: string
+          evaluated_at?: string | null
+          id?: string
+          predicted_price?: number
+          price_at_signal?: number
+          signal_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
