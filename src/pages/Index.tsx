@@ -653,6 +653,8 @@ const Index = () => {
           </div>
         </div>
 
+        <AccuracyDashboard />
+
         <p className="text-xs text-muted-foreground text-center max-w-2xl mx-auto pt-4">
           ⚠️ Educational only. Signals derived from RSI, Stochastic, EMA(20/50/200), MACD, Bollinger Bands, ADX, volume & candle patterns.
           Not financial advice.
