@@ -575,7 +575,7 @@ const Index = () => {
   }, [symbol, interval, market]);
 
   const [settings, setSettings] = useState<SignalSettings>(MARKET_PRESETS[market]);
-  const [showSettings, setShowSettings] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const signal = useMemo(() => computeSignal(candles, settings), [candles, settings]);
   const price = candles[candles.length - 1]?.close ?? 0;
 
