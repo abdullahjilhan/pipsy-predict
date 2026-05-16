@@ -3,6 +3,7 @@ import { createChart, CandlestickSeries, LineSeries, type IChartApi, type ISerie
 import { Activity, ArrowDown, ArrowUp, Bell, BellOff, Minus, RefreshCw, TrendingUp, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AccuracyDashboard } from "@/components/AccuracyDashboard";
+import pipsyLogo from "@/assets/pipsy-logo.png";
 
 type Market = "crypto" | "forex";
 
@@ -481,9 +482,7 @@ const Index = () => {
       <header className="border-b border-border/50 backdrop-blur-sm sticky top-0 z-10 bg-background/60">
         <div className="container flex items-center justify-between py-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-bull flex items-center justify-center glow-bull">
-              <Activity className="w-5 h-5 text-primary-foreground" strokeWidth={3} />
-            </div>
+            <img src={pipsyLogo} alt="Pipsy Signals logo" width={40} height={40} className="w-10 h-10 rounded-xl glow-bull" />
             <div>
               <h1 className="text-lg font-black tracking-tight">PIPSY<span className="text-primary">.</span>SIGNALS</h1>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Crypto &amp; Forex signal platform</p>
