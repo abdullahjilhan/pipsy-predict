@@ -43,6 +43,8 @@ type SignalAlignment = {
   stochastic: boolean;
 };
 
+type MarketCondition = "ranging" | "weak_trend" | "strong_trend";
+
 type Signal = {
   action: Action;
   confidence: number;
@@ -61,6 +63,8 @@ type Signal = {
   strength: number;
   alignment: SignalAlignment;
   score: number;
+  marketCondition: MarketCondition;
+  isSuppressed: boolean;
 };
 
 const MARKET_LABELS: Record<Market, string> = {
@@ -316,6 +320,12 @@ function adx(candles: Candle[], period = 14): number[] {
 // ============================================================
 // SIGNAL ENGINE (multi-indicator, 4-layer/6-indicator alignment)
 // ============================================================
+function getMarketCondition(adxValue: number): MarketCondition {
+  if (adxValue < 20) return "ranging";
+  if (adxValue >= 20 && adxValue <= 30) return "weak_trend";
+  return "strong_trend";
+}
+
 function computeSignal(candles: Candle[], settings: SignalSettings): Signal | null {
   if (candles.length < Math.max(settings.rsiPeriod, settings.emaMacro, settings.macdSlow, settings.bbPeriod, settings.adxPeriod) + 5) return null;
   const closes = candles.map((c) => c.close);
@@ -329,6 +339,9 @@ function computeSignal(candles: Candle[], settings: SignalSettings): Signal | nu
   const adxV = adx(candles, settings.adxPeriod);
   const i = closes.length - 1;
   const last = candles[i];
+
+  const marketCondition = getMarketCondition(adxV[i]);
+  const isSuppressed = marketCondition === "ranging";
 
   const emaMacroLong = Number.isFinite(eMacro[i]) && last.close > eMacro[i];
   const emaMacroShort = Number.isFinite(eMacro[i]) && last.close < eMacro[i];
@@ -406,12 +419,16 @@ function computeSignal(candles: Candle[], settings: SignalSettings): Signal | nu
   const confidence = Math.min(100, Math.round((strength / 6) * 100 + Math.abs(longCount - shortCount) * 5));
   let action: Action = "HOLD";
   let prediction: Signal["prediction"] = "NEUTRAL";
-  if (strength >= 4 && longCount > shortCount) {
-    action = "BUY";
-    prediction = "BULLISH";
-  } else if (strength >= 4 && shortCount > longCount) {
-    action = "SELL";
-    prediction = "BEARISH";
+  
+  // If suppressed by ADX (ranging market), don't emit BUY/SELL signals
+  if (!isSuppressed) {
+    if (strength >= 4 && longCount > shortCount) {
+      action = "BUY";
+      prediction = "BULLISH";
+    } else if (strength >= 4 && shortCount > longCount) {
+      action = "SELL";
+      prediction = "BEARISH";
+    }
   }
 
   return {
@@ -432,6 +449,8 @@ function computeSignal(candles: Candle[], settings: SignalSettings): Signal | nu
     adx: adxV[i],
     bbUpper: bb.upper[i],
     bbLower: bb.lower[i],
+    marketCondition,
+    isSuppressed,
   };
 }
 
@@ -584,7 +603,8 @@ const Index = () => {
     if (!signal) return;
     const a = signal.action;
     const prev = lastActionRef.current;
-    if (a !== prev && (a === "BUY" || a === "SELL")) {
+    // Only alert on signal changes to BUY/SELL if not suppressed
+    if (a !== prev && (a === "BUY" || a === "SELL") && !signal.isSuppressed) {
       setHistory((h) => [{ action: a, symbol, price, confidence: signal.confidence, at: new Date() }, ...h].slice(0, 20));
       if (soundEnabled) playTone(a);
       if (notifPermission === "granted") {
@@ -895,16 +915,55 @@ const Index = () => {
             <div className="rounded-2xl bg-card card-elevated border border-border overflow-hidden">
               {!signal ? (
                 <div className="p-6 text-muted-foreground text-sm">Loading signal…</div>
+              ) : signal.isSuppressed ? (
+                <>
+                  <div className="gradient-neutral p-6 text-foreground">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-widest opacity-80">{symbol} · Next candle</p>
+                        <h2 className="text-3xl font-black tracking-tight mt-1">No Signal</h2>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-widest opacity-80">Market Condition</p>
+                        <p className="text-xl font-black text-red-300 mt-1">RANGING</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <div className="rounded-lg border border-red-900/40 bg-red-950/20 p-4">
+                      <p className="text-sm font-semibold text-red-300">🔴 RANGING MARKET — No Signal</p>
+                      <p className="text-xs text-foreground/70 mt-2">ADX below 20 indicates choppy, range-bound conditions. Trading signals are suppressed to avoid false breakouts. Wait for trend confirmation.</p>
+                    </div>
+
+                    <MarketConditionIndicator condition={signal.marketCondition} adxValue={signal.adx} />
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <Metric label={`RSI(${settings.rsiPeriod})`} value={signal.rsi.toFixed(1)}
+                        accent={signal.rsi > settings.rsiOverbought ? "bear" : signal.rsi < settings.rsiOversold ? "bull" : undefined} />
+                      <Metric label="Stoch %K" value={signal.stochK.toFixed(1)}
+                        accent={signal.stochK > settings.stochOverbought ? "bear" : signal.stochK < settings.stochOversold ? "bull" : undefined} />
+                      <Metric label="ADX" value={signal.adx.toFixed(1)} accent="bear" />
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   <div className={`${gradient} ${glow} p-6 text-primary-foreground`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs uppercase tracking-widest opacity-80">{symbol} · Next candle</p>
-                        <h2 className="text-5xl font-black tracking-tight mt-1 flex items-center gap-3">
-                          <ActionIcon className="w-10 h-10" strokeWidth={3} />
-                          {signal.action}
-                        </h2>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2">
+                            <ActionIcon className="w-10 h-10" strokeWidth={3} />
+                            <h2 className="text-5xl font-black tracking-tight">{signal.action}</h2>
+                          </div>
+                          {signal.marketCondition === "weak_trend" && (
+                            <span className="ml-auto px-3 py-1 rounded-full bg-amber-500/30 border border-amber-500/50 text-xs font-bold uppercase tracking-wide text-amber-200">
+                              ⚠️ Weak Trend
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-2 text-sm font-medium opacity-90">Predicted: {signal.prediction}</p>
                       </div>
                       <div className="text-right">
@@ -919,6 +978,8 @@ const Index = () => {
                   </div>
 
                   <div className="p-6 space-y-4">
+                    <MarketConditionIndicator condition={signal.marketCondition} adxValue={signal.adx} />
+
                     <div className="grid grid-cols-3 gap-3">
                       <Metric label={`RSI(${settings.rsiPeriod})`} value={signal.rsi.toFixed(1)}
                         accent={signal.rsi > settings.rsiOverbought ? "bear" : signal.rsi < settings.rsiOversold ? "bull" : undefined} />
@@ -1004,6 +1065,24 @@ const Metric = ({ label, value, accent }: { label: string; value: string; accent
     <p className={`text-base font-bold tabular-nums ${accent === "bull" ? "text-bull" : accent === "bear" ? "text-bear" : ""}`}>{value}</p>
   </div>
 );
+
+const MarketConditionIndicator = ({ condition, adxValue }: { condition: MarketCondition; adxValue: number }) => {
+  const config = {
+    ranging: { emoji: "🔴", label: "Ranging Market", color: "text-red-400", bgColor: "bg-red-950/30", textColor: "text-red-300" },
+    weak_trend: { emoji: "🟡", label: "Weak Trend", color: "text-amber-400", bgColor: "bg-amber-950/30", textColor: "text-amber-300" },
+    strong_trend: { emoji: "🟢", label: "Strong Trend", color: "text-green-400", bgColor: "bg-green-950/30", textColor: "text-green-300" },
+  };
+  const { emoji, label, bgColor, textColor } = config[condition];
+  return (
+    <div className={`rounded-lg ${bgColor} border border-border p-3 flex items-center gap-3`}>
+      <span className="text-2xl">{emoji}</span>
+      <div className="flex-1">
+        <p className={`text-xs uppercase tracking-widest font-bold ${textColor}`}>{label}</p>
+        <p className="text-sm font-semibold text-foreground">ADX {adxValue.toFixed(1)}</p>
+      </div>
+    </div>
+  );
+};
 
 const RangeControl = ({
   label,
